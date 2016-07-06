@@ -15,14 +15,12 @@ import JSONWebToken
 
 let jwtSecretKey = JSONWebToken.Algorithm.HS256(key: "some_secret_key".data)
 
-let timestamp = time(nil)
-let token = try JSONWebToken.encode(payload: .infer([
-	"sub": .infer("1234567890"),
-	"iat": .infer(timestamp),
-	"exp": .infer(timestamp + 12.hours)
-]), algorithm: jwtSecretKey)
+var payload = AuthPayload()
+payload.expire(after: Int(12.hours))
+payload.sub = username
+let token = try JSONWebToken.encode(payload: payload)
 
-let payload = try JSONWebToken.decode(string: token, algorithm: jwtSecretKey)
+let decodedPayload = try JSONWebToken.decode(string: token, algorithm: jwtSecretKey)
 ```
 
 ## Installation
