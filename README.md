@@ -17,7 +17,7 @@ let jwtSecretKey = JSONWebToken.Algorithm.HS256(key: "some_secret_key".data)
 
 var payload = AuthPayload()
 payload.expire(after: Int(12.hours))
-payload.sub = username
+payload.sub = "username"
 let token = try JSONWebToken.encode(payload: payload)
 
 let decodedPayload = try JSONWebToken.decode(string: token, algorithm: jwtSecretKey)
