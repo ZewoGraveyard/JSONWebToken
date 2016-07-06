@@ -64,5 +64,5 @@ This project is released under the MIT license. See [LICENSE](LICENSE) for detai
 [slack-url]: http://slack.zewo.io
 [travis-badge]: https://travis-ci.org/Zewo/JSONWebToken.svg?branch=master
 [travis-url]: https://travis-ci.org/Zewo/JSONWebToken
-[codebeat-badge]: https://codebeat.co/badges/facbbe98-da45-4d5d-907b-c133d871912a
-[codebeat-url]: https://codebeat.co/projects/github-com-zewo-engineioserver
+[codebeat-badge]: https://codebeat.co/badges/91d3c452-646e-4098-978a-e1c63843f33e
+[codebeat-url]: https://codebeat.co/projects/github-com-zewo-jsonwebtoken
