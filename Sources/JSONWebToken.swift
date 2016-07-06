@@ -133,15 +133,15 @@ public struct JSONWebToken {
 			"typ": "JWT"
 		])
 		
-		let headerBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(header), specialChars: "-_", paddingChar: nil)
-		let payloadBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(payload.structuredData), specialChars: "-_", paddingChar: nil)
+		let headerBase64 = try Base64.urlSafeEncode(JSONWebToken.jsonSerializer.serialize(header))
+		let payloadBase64 = try Base64.urlSafeEncode(JSONWebToken.jsonSerializer.serialize(payload.structuredData))
 		
 		let message = headerBase64 + "." + payloadBase64
 		
 		guard let algorithm = algorithm else { return message }
 		
 		let encoded = try algorithm.encode(data: message.data)
-		let signature = Base64.encode(encoded, specialChars: "-_", paddingChar: nil)
+		let signature = Base64.urlSafeEncode(encoded)
 		return message + "." + signature
 	}
 	
