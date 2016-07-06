@@ -26,6 +26,50 @@
 @_exported import JSON
 @_exported import Base64
 @_exported import OpenSSL
+@_exported import Mapper
+
+public struct AuthPayload: StructuredDataRepresentable {
+	
+	public var structuredData: StructuredData = [:]
+	
+	public var iss: String? {
+		get { return structuredData["iss"]?.stringValue }
+		set { structuredData["iss"] = newValue == nil ? nil : .infer(newValue!) }
+	}
+	
+	public var sub: String? {
+		get { return structuredData["sub"]?.stringValue }
+		set { structuredData["sub"] = newValue == nil ? nil : .infer(newValue!) }
+	}
+	
+	public var iat: Int? {
+		get { return structuredData["iat"]?.intValue }
+		set { structuredData["iat"] = newValue == nil ? nil : .infer(newValue!) }
+	}
+	
+	public var exp: Int? {
+		get { return structuredData["exp"]?.intValue }
+		set { structuredData["exp"] = newValue == nil ? nil : .infer(newValue!) }
+	}
+	
+	public init() {}
+	
+	public mutating func expire(after: Int) {
+		let timestamp = time(nil)
+		self.iat = timestamp
+		self.exp = timestamp + after
+	}
+	
+}
+
+extension AuthPayload: Mappable {
+	public init(mapper: Mapper) throws {
+		iss = mapper.map(optionalFrom: "iss")
+		sub = mapper.map(optionalFrom: "sub")
+		iat = mapper.map(optionalFrom: "iat")
+		exp = mapper.map(optionalFrom: "exp")
+	}
+}
 
 public struct JSONWebToken {
 	
@@ -83,14 +127,14 @@ public struct JSONWebToken {
 	private static let jsonParser: JSONStructuredDataParser! = JSONStructuredDataParser()
 	private static let jsonSerializer: JSONStructuredDataSerializer! = JSONStructuredDataSerializer()
 	
-	public static func encode(payload: StructuredData, algorithm: Algorithm? = nil) throws -> String {
+	public static func encode(payload: AuthPayload, algorithm: Algorithm? = nil) throws -> String {
 		let header: StructuredData = .infer([
 			"alg": .infer(algorithm?.string ?? "none"),
 			"typ": "JWT"
 		])
 		
 		let headerBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(header), specialChars: "-_", paddingChar: nil)
-		let payloadBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(payload), specialChars: "-_", paddingChar: nil)
+		let payloadBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(payload.structuredData), specialChars: "-_", paddingChar: nil)
 		
 		let message = headerBase64 + "." + payloadBase64
 		
@@ -101,7 +145,7 @@ public struct JSONWebToken {
 		return message + "." + signature
 	}
 	
-	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> StructuredData {
+	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> AuthPayload {
 		let comps = string.split(separator: ".")
 		guard comps.count == 3 else { throw Error.MissingComponents }
 		
@@ -148,10 +192,10 @@ public struct JSONWebToken {
 			}
 		}
 		
-		return payload
+		return try AuthPayload(structuredData: payload)
 	}
 	
-	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> StructuredData {
+	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> AuthPayload {
 		var algorithms: [Algorithm] = []
 		if let algorithm = algorithm { algorithms.append(algorithm) }
 		return try decode(string: string, algorithms: algorithms)
