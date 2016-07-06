@@ -83,9 +83,9 @@ public struct JSONWebToken {
 	private static let jsonParser: JSONStructuredDataParser! = JSONStructuredDataParser()
 	private static let jsonSerializer: JSONStructuredDataSerializer! = JSONStructuredDataSerializer()
 	
-	public static func encode(algorithm: Algorithm, payload: StructuredData) throws -> String {
+	public static func encode(payload: StructuredData, algorithm: Algorithm? = nil) throws -> String {
 		let header: StructuredData = .infer([
-			"alg": .infer(algorithm.string),
+			"alg": .infer(algorithm?.string ?? "none"),
 			"typ": "JWT"
 		])
 		
@@ -93,13 +93,15 @@ public struct JSONWebToken {
 		let payloadBase64 = try Base64.encode(JSONWebToken.jsonSerializer.serialize(payload), specialChars: "-_", paddingChar: nil)
 		
 		let message = headerBase64 + "." + payloadBase64
+		
+		guard let algorithm = algorithm else { return message }
+		
 		let encoded = try algorithm.encode(data: message.data)
 		let signature = Base64.encode(encoded, specialChars: "-_", paddingChar: nil)
-		
 		return message + "." + signature
 	}
 	
-	public static func decode(string: String, verifyAlgoritms: [Algorithm] = []) throws -> StructuredData {
+	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> StructuredData {
 		let comps = string.split(separator: ".")
 		guard comps.count == 3 else { throw Error.MissingComponents }
 		
@@ -113,8 +115,8 @@ public struct JSONWebToken {
 		
 		let message = (headerBase64 + "." + payloadBase64).data
 		
-		var valid = verifyAlgoritms.count == 0
-		for algorithm in verifyAlgoritms {
+		var valid = algorithms.count == 0
+		for algorithm in algorithms {
 			if try Base64.urlSafeEncode(algorithm.encode(data: message)) == signature {
 				valid = true
 				break
@@ -149,5 +151,10 @@ public struct JSONWebToken {
 		return payload
 	}
 	
+	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> StructuredData {
+		var algorithms: [Algorithm] = []
+		if let algorithm = algorithm { algorithms.append(algorithm) }
+		return try decode(string: string, algorithms: algorithms)
+	}
+	
 }
-
