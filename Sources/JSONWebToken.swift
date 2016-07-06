@@ -28,49 +28,6 @@
 @_exported import OpenSSL
 @_exported import Mapper
 
-public struct AuthPayload: StructuredDataRepresentable {
-	
-	public var structuredData: StructuredData = [:]
-	
-	public var iss: String? {
-		get { return structuredData["iss"]?.stringValue }
-		set { structuredData["iss"] = newValue == nil ? nil : .infer(newValue!) }
-	}
-	
-	public var sub: String? {
-		get { return structuredData["sub"]?.stringValue }
-		set { structuredData["sub"] = newValue == nil ? nil : .infer(newValue!) }
-	}
-	
-	public var iat: Int? {
-		get { return structuredData["iat"]?.intValue }
-		set { structuredData["iat"] = newValue == nil ? nil : .infer(newValue!) }
-	}
-	
-	public var exp: Int? {
-		get { return structuredData["exp"]?.intValue }
-		set { structuredData["exp"] = newValue == nil ? nil : .infer(newValue!) }
-	}
-	
-	public init() {}
-	
-	public mutating func expire(after: Int) {
-		let timestamp = time(nil)
-		self.iat = timestamp
-		self.exp = timestamp + after
-	}
-	
-}
-
-extension AuthPayload: Mappable {
-	public init(mapper: Mapper) throws {
-		iss = mapper.map(optionalFrom: "iss")
-		sub = mapper.map(optionalFrom: "sub")
-		iat = mapper.map(optionalFrom: "iat")
-		exp = mapper.map(optionalFrom: "exp")
-	}
-}
-
 public struct JSONWebToken {
 	
 	public enum Error: ErrorProtocol {
@@ -124,10 +81,51 @@ public struct JSONWebToken {
 		}
 	}
 	
+	public struct Payload: StructuredDataRepresentable, Mappable {
+		
+		public var structuredData: StructuredData = [:]
+		
+		public var iss: String? {
+			get { return structuredData["iss"]?.stringValue }
+			set { structuredData["iss"] = newValue == nil ? nil : .infer(newValue!) }
+		}
+		
+		public var sub: String? {
+			get { return structuredData["sub"]?.stringValue }
+			set { structuredData["sub"] = newValue == nil ? nil : .infer(newValue!) }
+		}
+		
+		public var iat: Int? {
+			get { return structuredData["iat"]?.intValue }
+			set { structuredData["iat"] = newValue == nil ? nil : .infer(newValue!) }
+		}
+		
+		public var exp: Int? {
+			get { return structuredData["exp"]?.intValue }
+			set { structuredData["exp"] = newValue == nil ? nil : .infer(newValue!) }
+		}
+		
+		public init() {}
+		
+		public init(mapper: Mapper) throws {
+			iss = mapper.map(optionalFrom: "iss")
+			sub = mapper.map(optionalFrom: "sub")
+			iat = mapper.map(optionalFrom: "iat")
+			exp = mapper.map(optionalFrom: "exp")
+		}
+		
+		public mutating func expire(after: Int) {
+			let timestamp = time(nil)
+			self.iat = timestamp
+			self.exp = timestamp + after
+		}
+		
+	}
+	
 	private static let jsonParser: JSONStructuredDataParser! = JSONStructuredDataParser()
 	private static let jsonSerializer: JSONStructuredDataSerializer! = JSONStructuredDataSerializer()
 	
-	public static func encode(payload: AuthPayload, algorithm: Algorithm? = nil) throws -> String {
+	public static func encode(payload: Payload, algorithm: Algorithm? = nil) throws -> String {
 		let header: StructuredData = .infer([
 			"alg": .infer(algorithm?.string ?? "none"),
 			"typ": "JWT"
@@ -145,7 +143,7 @@ public struct JSONWebToken {
 		return message + "." + signature
 	}
 	
-	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> AuthPayload {
+	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> Payload {
 		let comps = string.split(separator: ".")
 		guard comps.count == 3 else { throw Error.MissingComponents }
 		
@@ -192,10 +190,10 @@ public struct JSONWebToken {
 			}
 		}
 		
-		return try AuthPayload(structuredData: payload)
+		return try Payload(structuredData: payload)
 	}
 	
-	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> AuthPayload {
+	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> Payload {
 		var algorithms: [Algorithm] = []
 		if let algorithm = algorithm { algorithms.append(algorithm) }
 		return try decode(string: string, algorithms: algorithms)
