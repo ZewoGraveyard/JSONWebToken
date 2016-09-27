@@ -13,7 +13,7 @@
 ```swift
 import JSONWebToken
 
-let algorithm = JSONWebToken.Algorithm.HS256(key: "some_secret_key".data)
+let algorithm = JSONWebToken.Algorithm.hs256(key: "some_secret_key".data)
 
 var payload = JSONWebToken.Payload()
 payload.expire(after: Int(12.hours))
