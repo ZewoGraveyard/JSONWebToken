@@ -22,96 +22,109 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-@_exported import POSIX
-@_exported import JSON
-@_exported import Base64
-@_exported import OpenSSL
-@_exported import Mapper
+import Foundation
+import Core
+import OpenSSL
+
+internal extension Data {
+	internal init?(urlSafeBase64Encoded base64String: String) {
+		let len = base64String.characters.count
+		let paddedLength = len + (4 - (len % 4))
+		let correctBase64String = base64String.padding(toLength: paddedLength, withPad: "=", startingAt: 0)
+		self.init(base64Encoded: correctBase64String)
+	}
+	
+	internal func urlSafeBase64EncodedString() -> String {
+		var str = base64EncodedString()
+		str = str.replacingOccurrences(of: "/", with: "_")
+		str = str.replacingOccurrences(of: "+", with: "-")
+		str = str.replacingOccurrences(of: "=", with: "")
+		return str
+	}
+}
 
 public struct JSONWebToken {
 	
-	public enum Error: ErrorProtocol {
-		case MissingComponents
-		case InvalidSignature
-		case InvalidExpiration
-		case Expired
+	public enum JWTError: Error {
+		case missingComponents
+		case invalidSignature
+		case invalidExpiration
+		case invalidPayload
+		case expired
 	}
 	
 	public enum Algorithm {
-		case HS256(key: Data)
-		case HS384(key: Data)
-		case HS512(key: Data)
+		case hs256(key: Data)
+		case hs384(key: Data)
+		case hs512(key: Data)
 		
-		case RS256(key: Key)
-		case RS384(key: Key)
-		case RS512(key: Key)
+		case rs256(key: Key)
+		case rs384(key: Key)
+		case rs512(key: Key)
 		
 		var string: String {
 			switch self {
-			case .HS256:
+			case .hs256:
 				return "HS256"
-			case .HS384:
+			case .hs384:
 				return "HS384"
-			case .HS512:
+			case .hs512:
 				return "HS512"
-			case .RS256:
+			case .rs256:
 				return "RS256"
-			case .RS384:
+			case .rs384:
 				return "RS384"
-			case .RS512:
+			case .rs512:
 				return "RS512"
 			}
 		}
 		
 		func encode(data: Data) throws -> Data {
 			switch self {
-			case .HS256(let key):
-				return Hash.hmac(.SHA256, key: key, message: data)
-			case .HS384(let key):
-				return Hash.hmac(.SHA384, key: key, message: data)
-			case .HS512(let key):
-				return Hash.hmac(.SHA512, key: key, message: data)
-			case .RS256(let key):
-				return try Hash.rsa(.SHA256, key: key, message: data)
-			case .RS384(let key):
-				return try Hash.rsa(.SHA384, key: key, message: data)
-			case .RS512(let key):
-				return try Hash.rsa(.SHA512, key: key, message: data)
+			case .hs256(let key):
+				return Hash.hmac(.sha256, key: key, message: data)
+			case .hs384(let key):
+				return Hash.hmac(.sha384, key: key, message: data)
+			case .hs512(let key):
+				return Hash.hmac(.sha512, key: key, message: data)
+			case .rs256(let key):
+				return try Hash.rsa(.sha256, key: key, message: data)
+			case .rs384(let key):
+				return try Hash.rsa(.sha384, key: key, message: data)
+			case .rs512(let key):
+				return try Hash.rsa(.sha512, key: key, message: data)
 			}
 		}
 	}
 	
-	public struct Payload: StructuredDataRepresentable, Mappable {
+	public struct Payload: MapRepresentable, MapConvertible {
 		
-		public var structuredData: StructuredData = [:]
+		public var map: Map = [:]
 		
 		public var iss: String? {
-			get { return structuredData["iss"]?.stringValue }
-			set { structuredData["iss"] = newValue == nil ? nil : .infer(newValue!) }
+			get { return try? map.get("iss") }
+			set { if let newValue = newValue { _ = try? map.set(newValue, for: "iss") } else { _ = try? map.remove("iss") } }
 		}
 		
 		public var sub: String? {
-			get { return structuredData["sub"]?.stringValue }
-			set { structuredData["sub"] = newValue == nil ? nil : .infer(newValue!) }
+			get { return try? map.get("sub") }
+			set { if let newValue = newValue { _ = try? map.set(newValue, for: "sub") } else { _ = try? map.remove("sub") } }
 		}
 		
 		public var iat: Int? {
-			get { return structuredData["iat"]?.intValue }
-			set { structuredData["iat"] = newValue == nil ? nil : .infer(newValue!) }
+			get { return try? map.get("iat") }
+			set { if let newValue = newValue { _ = try? map.set(newValue, for: "iat") } else { _ = try? map.remove("iat") } }
 		}
 		
 		public var exp: Int? {
-			get { return structuredData["exp"]?.intValue }
-			set { structuredData["exp"] = newValue == nil ? nil : .infer(newValue!) }
+			get { return try? map.get("exp") }
+			set { if let newValue = newValue { _ = try? map.set(newValue, for: "exp") } else { _ = try? map.remove("exp") } }
 		}
 		
 		public init() {}
 		
-		public init(mapper: Mapper) throws {
-			iss = mapper.map(optionalFrom: "iss")
-			sub = mapper.map(optionalFrom: "sub")
-			iat = mapper.map(optionalFrom: "iat")
-			exp = mapper.map(optionalFrom: "exp")
+		public init(map: Map) throws {
+			self.map = map
 		}
 		
 		public mutating func expire(after: Int) {
@@ -122,75 +135,80 @@ public struct JSONWebToken {
 		
 	}
 	
-	private static let jsonParser: JSONStructuredDataParser! = JSONStructuredDataParser()
-	private static let jsonSerializer: JSONStructuredDataSerializer! = JSONStructuredDataSerializer()
+	private static let jsonParser = JSONMapParser()
+	private static let jsonSerializer = JSONMapSerializer()
 	
 	public static func encode(payload: Payload, algorithm: Algorithm? = nil) throws -> String {
-		let header: StructuredData = .infer([
-			"alg": .infer(algorithm?.string ?? "none"),
+		let header: Map = [
+			"alg": try (algorithm?.string ?? "none").asMap(),
 			"typ": "JWT"
-		])
+		]
 		
-		let headerBase64 = try Base64.urlSafeEncode(JSONWebToken.jsonSerializer.serialize(header))
-		let payloadBase64 = try Base64.urlSafeEncode(JSONWebToken.jsonSerializer.serialize(payload.structuredData))
+		let headerBase64 = try jsonSerializer.serialize(header).urlSafeBase64EncodedString()
+		let payloadBase64 = try jsonSerializer.serialize(payload.map).urlSafeBase64EncodedString()
 		
 		let message = headerBase64 + "." + payloadBase64
 		
 		guard let algorithm = algorithm else { return message }
 		
 		let encoded = try algorithm.encode(data: message.data)
-		let signature = Base64.urlSafeEncode(encoded)
+		let signature = encoded.urlSafeBase64EncodedString()
 		return message + "." + signature
 	}
 	
 	public static func decode(string: String, algorithms: [Algorithm] = []) throws -> Payload {
 		let comps = string.split(separator: ".")
-		guard comps.count == 3 else { throw Error.MissingComponents }
+		guard comps.count == 3 else { throw JWTError.missingComponents }
 		
 		let headerBase64 = comps[0]
 		let payloadBase64 = comps[1]
 		var signature = comps[2]
 		
-		signature.replace(string: "+", with: "-")
-		signature.replace(string: "/", with: "_")
-		signature.replace(string: "=", with: "")
+		signature = signature.replacingOccurrences(of: "+", with: "-")
+		signature = signature.replacingOccurrences(of: "/", with: "_")
+		signature = signature.replacingOccurrences(of: "=", with: "")
 		
 		let message = (headerBase64 + "." + payloadBase64).data
 		
 		var valid = algorithms.count == 0
 		for algorithm in algorithms {
-			if try Base64.urlSafeEncode(algorithm.encode(data: message)) == signature {
+			if try algorithm.encode(data: message).urlSafeBase64EncodedString() == signature {
 				valid = true
 				break
 			}
 		}
 		
 		guard valid else {
-			throw Error.InvalidSignature
+			throw JWTError.invalidSignature
 		}
 		
-		let payloadJson = try Base64.decode(payloadBase64)
-		let payload = try JSONWebToken.jsonParser.parse(payloadJson)
-		
-		if let expVal = payload["exp"] {
-			let exp: Int
-			
-			if let expInt = expVal.intValue {
-				exp = expInt
-			} else if let expDouble = expVal.doubleValue {
-				exp = Int(expDouble)
-			} else if let expStr = expVal.stringValue, expInt = Int(expStr) {
-				exp = expInt
-			} else {
-				throw Error.InvalidExpiration
-			}
-			
-			if exp < time(nil) {
-				throw Error.Expired
-			}
+		guard let payloadJson = Data(urlSafeBase64Encoded: payloadBase64) else {
+			throw JWTError.invalidPayload
 		}
 		
-		return try Payload(structuredData: payload)
+		let payload = try jsonParser.parse(payloadJson)
+		
+		let expVal = payload["exp"]
+		let exp: Int
+		switch expVal {
+		case .string(let expStr):
+			guard let expInt = Int(expStr) else {
+				throw JWTError.invalidExpiration
+			}
+			exp = expInt
+		case .int(let expInt):
+			exp = expInt
+		case .double(let expDouble):
+			exp = Int(expDouble)
+		default:
+			throw JWTError.invalidExpiration
+		}
+		
+		if exp < time(nil) {
+			throw JWTError.expired
+		}
+		
+		return try Payload(map: payload)
 	}
 	
 	public static func decode(string: String, algorithm: Algorithm? = nil) throws -> Payload {

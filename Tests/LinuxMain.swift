@@ -1,9 +1,6 @@
-#if os(Linux)
-
 import XCTest
-@testable import JSONWebTokenTestSuite
+@testable import JSONWebTokenTests
 
 XCTMain([
   testCase(JSONWebTokenTests.allTests),
 ])
-#endif
